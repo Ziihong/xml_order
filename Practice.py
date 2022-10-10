@@ -8,7 +8,7 @@ class DB_Utils:
         conn = pymysql.connect(host='localhost', user='guest', password='bemyguest', db=db, charset='utf8')
 
         try:
-            with conn.cursor(pymysql.cursors.DictCursor) as cursor:  # dictionary based cursor
+            with conn.cursor(pymysql.cursors.DictCursor) as cursor:     # dictionary based cursor
                 cursor.execute(sql, params)
                 rows = cursor.fetchall()
                 return rows
@@ -32,7 +32,7 @@ class DB_Utils:
             conn.close()
 
 class DB_Queries:
-
+    # 모든 검색문은 여기에 각각 하나의 메소드로 정의
 
     def selectPlayerPosition(self):
         sql = "SELECT DISTINCT position FROM player"
@@ -48,7 +48,7 @@ class DB_Queries:
             params = ()
         else:
             sql = "SELECT * FROM player WHERE position = %s"
-            params = (value)  # SQL문의 실제 파라미터 값의 튜플
+            params = (value)         # SQL문의 실제 파라미터 값의 튜플
 
         util = DB_Utils()
         rows = util.queryExecutor(db="kleague", sql=sql, params=params)
@@ -64,10 +64,10 @@ class DB_Updates:
         util = DB_Utils()
         util.updateExecutor(db="kleague", sql=sql, params=params)
 
-
+#########################################
 
 class MainWindow(QWidget):
-    def __int__(self):
+    def __init__(self):
         super().__init__()
         self.setupUI()
 
@@ -75,13 +75,13 @@ class MainWindow(QWidget):
 
         # DB 검색문 실행
         query = DB_Queries()
-        rows = query.selectPlayerPosition()  # 딕셔너리의 리스트
+        rows = query.selectPlayerPosition()        # 딕셔너리의 리스트
         print(rows)
         print()
         # [{'position': 'DF'}, {'position': 'FW'}, {'position': None}, {'position': 'MF'}, {'position': 'GK'}]
 
         # 윈도우 설정
-        self.setWindowTitle("DBAPI를 통한 테이블 위젯 제어 예제 테스트")
+        self.setWindowTitle("DBAPI를 통한 테이블 위젯 제어 예제")
         self.setGeometry(0, 0, 1100, 620)
 
         # 라벨 설정
@@ -106,33 +106,33 @@ class MainWindow(QWidget):
         self.pushButton.clicked.connect(self.pushButton_Clicked)
 
         # 테이블위젯 설정
-        self.tableWidget = QTableWidget(self)  # QTableWidget 객체 생성
+        self.tableWidget = QTableWidget(self)   # QTableWidget 객체 생성
         self.tableWidget.move(50, 100)
         self.tableWidget.resize(1000, 500)
 
     def comboBox_Activated(self):
 
-        self.positionValue = self.comboBox.currentText()
+        self.positionValue = self.comboBox.currentText()  # positionValue를 통해 선택한 포지션 값을 전달
 
     def pushButton_Clicked(self):
 
+        # DB 검색문 실행
         query = DB_Queries()
-        players = query.selectPlayerUsingPosition(self.positionValue) # dict
+        players = query.selectPlayerUsingPosition(self.positionValue)
 
-        self.tableWidget.clearContents() # content 비워주기
+        self.tableWidget.clearContents()
         self.tableWidget.setRowCount(len(players))
         self.tableWidget.setColumnCount(len(players[0]))
         columnNames = list(players[0].keys())
         self.tableWidget.setHorizontalHeaderLabels(columnNames)
-        # setEditTriggers 테이블의 항목을 편집 가능하도록 하는 액션을 지정. 해당 속성 지정시, 편집 불가능
         self.tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
-        for rowIDX, player in enumerate(players):
+        for rowIDX, player in enumerate(players):                              # player는 딕셔너리임.
             for columnIDX, (k, v) in enumerate(player.items()):
-                if v == None:
-                    continue
-                elif isinstance(v, datetime.date):
-                    item = QTableWidgetItem(v.strftime("%Y-%m-%d"))
+                if v == None:                               # 파이썬이 DB의 널값을 None으로 변환함.
+                    continue                                # QTableWidgetItem 객체를 생성하지 않음
+                elif isinstance(v, datetime.date):          # QTableWidgetItem 객체 생성
+                    item = QTableWidgetItem(v.strftime('%Y-%m-%d'))
                 else:
                     item = QTableWidgetItem(str(v))
 
@@ -141,6 +141,7 @@ class MainWindow(QWidget):
         self.tableWidget.resizeColumnsToContents()
         self.tableWidget.resizeRowsToContents()
 
+#########################################
 
 def main():
     app = QApplication(sys.argv)
