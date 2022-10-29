@@ -45,33 +45,9 @@ class DB_Queries:
         rows = util.queryExecutor(sql=sql, params=params)
         return rows
 
-    def selectUsingCustomer(self, value):
-        if value == "없음":
-            sql = "SELECT * FROM customers WHERE name IS NULL"
-            params = ()
-        else:
-            sql = "SELECT * FROM customers WHERE name = %s"
-            params = (value)
-
-        util = DB_Utils()
-        rows = util.queryExecutor(sql=sql, params=params)
-        return rows
-
     def selectCountry(self):
         sql = "SELECT DISTINCT country FROM customers ORDER BY country"
         params = ()
-
-        util = DB_Utils()
-        rows = util.queryExecutor(sql=sql, params=params)
-        return rows
-
-    def selectUsingCountry(self, value):
-        if value == "없음":
-            sql = "SELECT * FROM customers WHERE country IS NULL"
-            params = ()
-        else:
-            sql = "SELECT * FROM customers WHERE country = %s"
-            params = (value)
 
         util = DB_Utils()
         rows = util.queryExecutor(sql=sql, params=params)
@@ -85,17 +61,43 @@ class DB_Queries:
         rows = util.queryExecutor(sql=sql, params=params)
         return rows
 
-    def selectUsingCity(self, value):
+    # def selectUsingCustomer(self, value):
+    #     if value == "없음":
+    #         sql = "SELECT * FROM customers WHERE name IS NULL"
+    #         params = ()
+    #     else:
+    #         sql = "SELECT * FROM customers WHERE name = %s"
+    #         params = (value)
+    #
+    #     util = DB_Utils()
+    #     rows = util.queryExecutor(sql=sql, params=params)
+    #     return rows
+
+    def selectUsingCountry(self, value):
         if value == "없음":
-            sql = "SELECT * FROM customers WHERE city IS NULL"
+            sql = "SELECT orderNo, orderDate, requiredDate, shippedDate, status, name, comments " \
+                  "FROM orders O JOIN customers C ON O.customerId = C.customerId WHERE country IS NULL ORDER BY orderNo"
             params = ()
         else:
-            sql = "SELECT * FROM customers WHERE city = %s"
+            sql = "SELECT orderNo, orderDate, requiredDate, shippedDate, status, name, comments " \
+                  "FROM orders O JOIN customers C ON O.customerId = C.customerId WHERE country = %s ORDER BY orderNo"
             params = (value)
 
         util = DB_Utils()
         rows = util.queryExecutor(sql=sql, params=params)
         return rows
+
+    # def selectUsingCity(self, value):
+    #     if value == "없음":
+    #         sql = "SELECT * FROM customers WHERE city IS NULL"
+    #         params = ()
+    #     else:
+    #         sql = "SELECT * FROM customers WHERE city = %s"
+    #         params = (value)
+    #
+    #     util = DB_Utils()
+    #     rows = util.queryExecutor(sql=sql, params=params)
+    #     return rows
 
     def selectUsingOption(self, customer_value, country_value, city_value):
 
@@ -114,8 +116,10 @@ class DB_Queries:
         rows = util.queryExecutor(sql=sql, params=params)
         return rows
 
+
     def showAll(self):
-        sql = "SELECT * FROM customers"
+        sql = "SELECT orderNo, orderDate, requiredDate, shippedDate, status, name, comments " \
+              "FROM orders O JOIN customers C ON O.customerId = C.customerId ORDER BY orderNo"
         params = ()
 
         util = DB_Utils()
@@ -124,7 +128,6 @@ class DB_Queries:
 
 
 class DB_Updates:
-    # 모든 갱신문은 여기에 각각 하나의 메소드로 정의
 
     def insertPlayer(self, player_id, player_name, team_id, position):
         sql = "INSERT INTO player (player_id, player_name, team_id, position) VALUES (%s, %s, %s, %s)"
@@ -132,7 +135,6 @@ class DB_Updates:
 
         util = DB_Utils()
         util.updateExecutor(sql=sql, params=params)
-
 
 
 class DetailWindow(QWidget):
@@ -223,6 +225,7 @@ class MainWindow(QWidget):
         self.countryValue = "NULL"
         self.cityValue = "NULL"
 
+
         # 주문 검색 - search
         # 콤보박스 설정
         self.customerLabel = QLabel("고객:")
@@ -232,14 +235,12 @@ class MainWindow(QWidget):
         self.customerComboBox.addItems(itemsCustomer)
         self.customerComboBox.activated.connect(self.customerComboBox_Activated)
 
-
         self.countryLabel = QLabel("국가:")
         self.countryLabel.setAlignment(QtCore.Qt.AlignCenter)
         self.countryComboBox = QComboBox(self)
         self.countryComboBox.addItem("ALL")
         self.countryComboBox.addItems(itemsCountry)
         self.countryComboBox.activated.connect(self.countryComboBox_Activated)
-
 
         self.cityLabel = QLabel("도시:")
         self.cityLabel.setAlignment(QtCore.Qt.AlignCenter)
@@ -253,12 +254,12 @@ class MainWindow(QWidget):
         self.resultLabel = QLabel("검색된 주문의 개수: ")
         self.resultLabel.setAlignment(QtCore.Qt.AlignRight)
 
+
         # 푸쉬버튼
         self.searchButton = QPushButton("검색", self)
         self.searchButton.clicked.connect(self.searchButton_Clicked)
         self.initButton = QPushButton("초기화", self)
         self.initButton.clicked.connect(self.initButton_Clicked)
-
 
 
         # 주문 검색 QGridLayout
@@ -279,7 +280,7 @@ class MainWindow(QWidget):
         self.groupBox.setLayout(searchLayout)
 
 
-        # # QTableWidget
+        # QTableWidget
         self.tableWidget = QTableWidget()
         self.tableWidget.cellClicked.connect(self.tableCell_Clicked)
         # self.tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers) # 변경 불가능 옵션
@@ -297,22 +298,28 @@ class MainWindow(QWidget):
     def customerComboBox_Activated(self):
         self.customerValue = self.customerComboBox.currentText()
 
+
     def countryComboBox_Activated(self):
         self.countryValue = self.countryComboBox.currentText()
+
 
     def cityComboBox_Activated(self):
         self.cityValue = self.cityComboBox.currentText()
 
 
-
     def initTable(self):
         self.initButton_Clicked()
 
-    def drawTable(self, results):
-        self.customerComboBox.setCurrentText("ALL")
-        self.countryComboBox.setCurrentText("ALL")
-        self.cityComboBox.setCurrentText("ALL")
 
+    def drawTable(self, results):
+        # 검색 결과 개수
+        if results == None:
+            count = 0
+        else:
+            count = len(results)
+        self.setResultCount(count)
+
+        # 검색 결과 테이블
         self.tableWidget.clearContents()
         self.tableWidget.setRowCount(len(results))
         self.tableWidget.setColumnCount(len(results[0]))
@@ -335,12 +342,19 @@ class MainWindow(QWidget):
         self.tableWidget.resizeRowsToContents()
 
 
+    def setResultCount(self, count):
+        self.resultLabel.setText("검색된 주문의 개수:  " + str(count) + "개")
+
+
     # Click event
     def initButton_Clicked(self):
+        self.customerComboBox.setCurrentText("ALL")
+        self.countryComboBox.setCurrentText("ALL")
+        self.cityComboBox.setCurrentText("ALL")
+
         query = DB_Queries()
         results = query.showAll()
-        print(len(results))
-        print(results)
+
         self.drawTable(results)
 
 
@@ -348,7 +362,7 @@ class MainWindow(QWidget):
         query = DB_Queries()
         # results = query.selectUsingOption(self.customerValue, self.countryValue, self.cityValue)
         results = query.selectUsingCountry(self.countryValue)
-        print(results)
+
         self.drawTable(results)
 
 
