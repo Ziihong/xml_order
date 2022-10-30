@@ -75,12 +75,12 @@ class DB_Queries:
 
     def selectUsingCountry(self, value):
         if value == "없음":
-            sql = "SELECT orderNo, orderDate, requiredDate, shippedDate, status, name, comments " \
-                  "FROM orders O JOIN customers C ON O.customerId = C.customerId WHERE country IS NULL ORDER BY orderNo"
+            sql = "SELECT orderNo, orderDate, requiredDate, shippedDate, status, name as customer, comments " \
+                  "FROM orders JOIN customers USING(customerId) WHERE country IS NULL ORDER BY orderNo"
             params = ()
         else:
-            sql = "SELECT orderNo, orderDate, requiredDate, shippedDate, status, name, comments " \
-                  "FROM orders O JOIN customers C ON O.customerId = C.customerId WHERE country = %s ORDER BY orderNo"
+            sql = "SELECT orderNo, orderDate, requiredDate, shippedDate, status, name as customer, comments " \
+                  "FROM orders JOIN customers USING(customerId) WHERE country = %s ORDER BY orderNo"
             params = (value)
 
         util = DB_Utils()
@@ -118,52 +118,62 @@ class DB_Queries:
 
 
     def showAll(self):
-        sql = "SELECT orderNo, orderDate, requiredDate, shippedDate, status, name, comments " \
-              "FROM orders O JOIN customers C ON O.customerId = C.customerId ORDER BY orderNo"
+        sql = "SELECT orderNo, orderDate, requiredDate, shippedDate, status, name as customer, comments " \
+              "FROM orders JOIN customers USING(customerId) ORDER BY orderNo"
         params = ()
 
         util = DB_Utils()
         rows = util.queryExecutor(sql=sql, params=params)
         return rows
 
+    def showDetail(self, value):
 
-class DB_Updates:
+        sql = "SELECT orderLineNo, productCode, name as productName, quantity, priceEach, quantity*priceEach as 상품주문액 " \
+              "FROM orderDetails od INNER JOIN orders o USING(orderNo) " \
+              "INNER JOIN products p USING(productCode) " \
+              "WHERE orderNo = %s ORDER BY orderLineNo"
+        params = (str(value))
 
-    def insertPlayer(self, player_id, player_name, team_id, position):
-        sql = "INSERT INTO player (player_id, player_name, team_id, position) VALUES (%s, %s, %s, %s)"
-        params = (player_id, player_name, team_id, position)
-
+        # sql = "SELECT * FROM orderDetails OD CROSS JOIN orders O ON OD.orderNo = O.orderNo"
+        # params = ()
         util = DB_Utils()
-        util.updateExecutor(sql=sql, params=params)
+        rows = util.queryExecutor(sql=sql, params=params)
+        return rows
 
+
+# insert into orderDetails(orderNo, productCode, quantity, priceEach, orderLineNo) values
+# insert into orders(orderNo, orderDate, requiredDate, shippedDate, status, comments, customerId) values
+# insert into products(productCode, name, productLine, scale, vendor, description, quantityInStock, buyPrice, MSRP) values
 
 class DetailWindow(QWidget):
-    def __init__(self):
+    def __init__(self, orderNo):
         super().__init__()
         self.setupUI()
+        self.drawTable(orderNo)
         self.show()
+        print("init ", orderNo)
 
     def setupUI(self):
 
         # order_num
-        orderNumLabel = QLabel("주문번호: ", self)
+        self.orderNumLabel = QLabel("주문번호: ", self)
         # product_count
-        productCount = QLabel("상품개수: ", self)
+        self.productCountLabel = QLabel("상품개수: ", self)
         # product_price
-        productPrice = QLabel("주문액: ", self)
+        self.productPriceLabel = QLabel("주문액: ", self)
 
         # 주문 상세 내역
         self.detailLayout = QHBoxLayout()
-        self.detailLayout.addWidget(orderNumLabel)
-        self.detailLayout.addWidget(productCount)
-        self.detailLayout.addWidget(productPrice)
+        self.detailLayout.addWidget(self.orderNumLabel)
+        self.detailLayout.addWidget(self.productCountLabel)
+        self.detailLayout.addWidget(self.productPriceLabel)
 
         # 주문 상세 내역 QHBoxLayout -> QGroupBox
         self.detailGroupBox = QGroupBox("주문 상세 내역")
         self.detailGroupBox.setLayout(self.detailLayout)
 
         # QTableWidget
-        self.tableWidget = QTableWidget(100, 8)
+        self.tableWidget = QTableWidget(self)
         self.tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers) # 변경 불가능
 
 
@@ -193,9 +203,48 @@ class DetailWindow(QWidget):
         layout.addWidget(self.tableWidget)
         layout.addWidget(self.fileGroupBox)
 
-
         self.setLayout(layout)
 
+
+    def drawTable(self, orderNo):
+
+        query = DB_Queries()
+        results = query.showDetail(orderNo)
+
+        # 주문 상세 내역
+        totalCount = len(results)
+        totalPrice = 0
+        for r in results:
+            totalPrice += r["상품주문액"]
+        self.setDetail(orderNo, totalCount, totalPrice)
+
+        # 검색 결과 테이블
+        self.tableWidget.clearContents()
+        self.tableWidget.setRowCount(len(results))
+        self.tableWidget.setColumnCount(len(results[0]))
+        columnNames = list(results[0].keys())
+        self.tableWidget.setHorizontalHeaderLabels(columnNames)
+        self.tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers)
+
+        for rowIdx, result in enumerate(results):
+            for colIdx, (k, v) in enumerate(result.items()):
+                if v == None:
+                    continue
+                elif isinstance(v, datetime.date):
+                    item = QTableWidgetItem(v.strftime("%Y-%m-%d"))
+                else:
+                    item = QTableWidgetItem(str(v))
+
+                self.tableWidget.setItem(rowIdx, colIdx, item)
+
+        self.tableWidget.resizeColumnsToContents()
+        self.tableWidget.resizeRowsToContents()
+
+
+    def setDetail(self, orderNo, totalCount, totalPrice):
+        self.orderNumLabel.setText("주문번호:  " + orderNo)
+        self.productCountLabel.setText("상품개수:  " + str(totalCount) + "개")
+        self.productPriceLabel.setText("주문액:  " + str(totalPrice))
 
 
 class MainWindow(QWidget):
@@ -283,7 +332,7 @@ class MainWindow(QWidget):
         # QTableWidget
         self.tableWidget = QTableWidget()
         self.tableWidget.cellClicked.connect(self.tableCell_Clicked)
-        # self.tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers) # 변경 불가능 옵션
+        self.tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers) # 변경 불가능 옵션
 
 
         # 화면 전체 layout
@@ -291,8 +340,10 @@ class MainWindow(QWidget):
         self.layout.addWidget(self.groupBox)
         self.layout.addWidget(self.tableWidget)
         self.setLayout(self.layout)
-        self.initTable()
 
+
+        # 테이블 초기화
+        self.initTable()
 
 
     def customerComboBox_Activated(self):
@@ -313,11 +364,7 @@ class MainWindow(QWidget):
 
     def drawTable(self, results):
         # 검색 결과 개수
-        if results == None:
-            count = 0
-        else:
-            count = len(results)
-        self.setResultCount(count)
+        self.setResultCount(len(results))
 
         # 검색 결과 테이블
         self.tableWidget.clearContents()
@@ -366,8 +413,13 @@ class MainWindow(QWidget):
         self.drawTable(results)
 
 
-    def tableCell_Clicked(self):
-        self.detailWindow = DetailWindow()
+    def tableCell_Clicked(self, row, col):
+        # orderNo 선택
+        orderNo = self.tableWidget.item(row, col).text()
+        print(orderNo)
+
+        # print(self.tableWidget.item(item).text())
+        self.detailWindow = DetailWindow(orderNo)
         self.detailWindow.show()
 
 
