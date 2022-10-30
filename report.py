@@ -4,6 +4,9 @@ from PyQt5 import QtCore
 from PyQt5.QtWidgets import *
 import sys, datetime
 
+import csv
+import json
+import xml.etree.ElementTree as ET
 
 class DB_Utils:
 
@@ -128,22 +131,16 @@ class DB_Queries:
 
     def showDetail(self, value):
 
-        sql = "SELECT orderLineNo, productCode, name as productName, quantity, priceEach, quantity*priceEach as 상품주문액 " \
+        sql = "SELECT orderLineNo, productCode, name as productName, quantity, CONVERT(priceEach, CHAR) as priceEach, CONVERT(quantity*priceEach, CHAR) as 상품주문액 " \
               "FROM orderDetails od INNER JOIN orders o USING(orderNo) " \
               "INNER JOIN products p USING(productCode) " \
               "WHERE orderNo = %s ORDER BY orderLineNo"
         params = (str(value))
 
-        # sql = "SELECT * FROM orderDetails OD CROSS JOIN orders O ON OD.orderNo = O.orderNo"
-        # params = ()
         util = DB_Utils()
         rows = util.queryExecutor(sql=sql, params=params)
         return rows
 
-
-# insert into orderDetails(orderNo, productCode, quantity, priceEach, orderLineNo) values
-# insert into orders(orderNo, orderDate, requiredDate, shippedDate, status, comments, customerId) values
-# insert into products(productCode, name, productLine, scale, vendor, description, quantityInStock, buyPrice, MSRP) values
 
 class DetailWindow(QWidget):
     def __init__(self, orderNo):
@@ -151,7 +148,8 @@ class DetailWindow(QWidget):
         self.setupUI()
         self.drawTable(orderNo)
         self.show()
-        print("init ", orderNo)
+
+        self.saveMethod = "CSV"
 
     def setupUI(self):
 
@@ -179,20 +177,25 @@ class DetailWindow(QWidget):
 
         # 파일 출력 radio button
         self.radioBtnCSV = QRadioButton("CSV", self)
-        self.radioBtnCSV.setChecked(True)
+        self.radioBtnCSV.clicked.connect(self.radioBtn_Clicked)
         self.radioBtnJSON = QRadioButton("JSON", self)
+        self.radioBtnJSON.clicked.connect(self.radioBtn_Clicked)
         self.radioBtnXML = QRadioButton("XML", self)
+        self.radioBtnXML.clicked.connect(self.radioBtn_Clicked)
+        self.radioBtnCSV.setChecked(True)
+
 
         # 저장 button
         self.saveButton = QPushButton("저장", self)
+        self.saveButton.clicked.connect(self.saveBtn_Clicked)
 
+        # 파일 출력 QHBoxLayout -> QGroupBox
         self.radioLayout = QHBoxLayout()
         self.radioLayout.addWidget(self.radioBtnCSV)
         self.radioLayout.addWidget(self.radioBtnJSON)
         self.radioLayout.addWidget(self.radioBtnXML)
         self.radioLayout.addWidget(self.saveButton)
 
-        # 파일 출력 QHBoxLayout -> QGroupBox
         self.fileGroupBox = QGroupBox("파일 출력")
         self.fileGroupBox.setLayout(self.radioLayout)
 
@@ -209,24 +212,24 @@ class DetailWindow(QWidget):
     def drawTable(self, orderNo):
 
         query = DB_Queries()
-        results = query.showDetail(orderNo)
+        self.results = query.showDetail(orderNo)
 
         # 주문 상세 내역
-        totalCount = len(results)
+        totalCount = len(self.results)
         totalPrice = 0
-        for r in results:
-            totalPrice += r["상품주문액"]
-        self.setDetail(orderNo, totalCount, totalPrice)
+        for r in self.results:
+            totalPrice += float(r["상품주문액"])
+        self.setDetailHistory(orderNo, totalCount, totalPrice)
 
         # 검색 결과 테이블
         self.tableWidget.clearContents()
-        self.tableWidget.setRowCount(len(results))
-        self.tableWidget.setColumnCount(len(results[0]))
-        columnNames = list(results[0].keys())
+        self.tableWidget.setRowCount(len(self.results))
+        self.tableWidget.setColumnCount(len(self.results[0]))
+        columnNames = list(self.results[0].keys())
         self.tableWidget.setHorizontalHeaderLabels(columnNames)
         self.tableWidget.setEditTriggers(QAbstractItemView.NoEditTriggers)
 
-        for rowIdx, result in enumerate(results):
+        for rowIdx, result in enumerate(self.results):
             for colIdx, (k, v) in enumerate(result.items()):
                 if v == None:
                     continue
@@ -241,16 +244,91 @@ class DetailWindow(QWidget):
         self.tableWidget.resizeRowsToContents()
 
 
-    def setDetail(self, orderNo, totalCount, totalPrice):
+    def setDetailHistory(self, orderNo, totalCount, totalPrice):
         self.orderNumLabel.setText("주문번호:  " + orderNo)
         self.productCountLabel.setText("상품개수:  " + str(totalCount) + "개")
         self.productPriceLabel.setText("주문액:  " + str(totalPrice))
+
+
+    def radioBtn_Clicked(self):
+        if self.radioBtnCSV.isChecked():
+            self.saveMethod = "CSV"
+        elif self.radioBtnJSON.isChecked():
+            self.saveMethod = "JSON"
+        elif self.radioBtnXML.isChecked():
+            self.saveMethod = "XML"
+
+
+    def saveBtn_Clicked(self):
+        if self.saveMethod == "CSV":
+            self.writeCSV()
+        elif self.saveMethod == "JSON":
+            self.writeJSON()
+        elif self.saveMethod == "XML":
+            self.writeXML()
+
+
+    def writeCSV(self):
+        with open("orderDetail.csv", "w", encoding="utf-8", newline='') as f:
+            wr = csv.writer(f)
+            columnNames = list(self.results[0].keys())
+            wr.writerow(columnNames)
+
+            for result in self.results:
+                item = list(result.values())
+                wr.writerow(item)
+
+
+    def writeJSON(self):
+        for result in self.results:
+            for k, v in result.items():
+                if isinstance(v, datetime.date):
+                    result[k] = v.strftime("%Y-%m-%d")
+
+        newDict = dict(orderDetail = self.results)
+
+        with open("orderDetail.json", "w", encoding="utf-8") as f:
+            json.dump(newDict, f, indent=4, ensure_ascii=False)
+
+
+
+    def writeXML(self):
+        for result in self.results:
+            for k, v in result.items():
+                if isinstance(v, datetime.date):
+                    result[k] = v.strftime("%Y-%m-%d")
+
+        newDict = dict(orderDetail = self.results)
+
+        tableName = list(newDict.keys())[0]
+        tableRows = list(newDict.values())[0]
+
+        rootElement = ET.Element("Table")
+        rootElement.attrib["name"] = tableName
+
+        for row in tableRows:
+            rowElement = ET.Element("Row")
+            rootElement.append(rowElement)
+
+            for colName in list(row.keys()):
+                if row[colName] == None:
+                    rowElement.attrib[colName] = ''
+                elif type(row[colName]) == int:
+                    rowElement.attrib[colName] = str(row[colName])
+                else:
+                    rowElement.attrib[colName] = row[colName]
+
+        ET.ElementTree(rootElement).write("orderDetail.xml", encoding="utf-8", xml_declaration=True)
+
 
 
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setupUI()
+        self.customerValue = "ALL"
+        self.countryValue = "ALL"
+        self.cityValue = "ALL"
 
     def setupUI(self):
 
@@ -268,11 +346,6 @@ class MainWindow(QWidget):
 
         colCity = list(rowsCity[0].keys())[0]
         itemsCity = ['없음' if row[colCity] == None else row[colCity] for row in rowsCity]
-
-
-        self.customerValue = "NULL"
-        self.countryValue = "NULL"
-        self.cityValue = "NULL"
 
 
         # 주문 검색 - search
@@ -413,12 +486,10 @@ class MainWindow(QWidget):
         self.drawTable(results)
 
 
-    def tableCell_Clicked(self, row, col):
-        # orderNo 선택
-        orderNo = self.tableWidget.item(row, col).text()
-        print(orderNo)
+    def tableCell_Clicked(self):
+        # orderNo 전달
+        orderNo = self.tableWidget.item(self.tableWidget.currentRow(), 0).text()
 
-        # print(self.tableWidget.item(item).text())
         self.detailWindow = DetailWindow(orderNo)
         self.detailWindow.show()
 
