@@ -64,17 +64,26 @@ class DB_Queries:
         rows = util.queryExecutor(sql=sql, params=params)
         return rows
 
-    # def selectUsingCustomer(self, value):
-    #     if value == "없음":
-    #         sql = "SELECT * FROM customers WHERE name IS NULL"
-    #         params = ()
-    #     else:
-    #         sql = "SELECT * FROM customers WHERE name = %s"
-    #         params = (value)
-    #
-    #     util = DB_Utils()
-    #     rows = util.queryExecutor(sql=sql, params=params)
-    #     return rows
+    def selectCityInCountry(self, value):
+        sql = "SELECT DISTINCT city FROM customers WHERE country = %s ORDER BY city"
+        params = (value)
+
+        util = DB_Utils()
+        rows = util.queryExecutor(sql=sql, params=params)
+        return rows
+
+
+    def selectUsingCustomer(self, value):
+        if value == "없음":
+            sql = "SELECT * FROM customers WHERE name IS NULL ORDER BY orderNo"
+            params = ()
+        else:
+            sql = "SELECT * FROM customers WHERE name = %s ORDER BY orderNo"
+            params = (value)
+
+        util = DB_Utils()
+        rows = util.queryExecutor(sql=sql, params=params)
+        return rows
 
     def selectUsingCountry(self, value):
         if value == "없음":
@@ -82,38 +91,30 @@ class DB_Queries:
                   "FROM orders JOIN customers USING(customerId) WHERE country IS NULL ORDER BY orderNo"
             params = ()
         else:
-            sql = "SELECT orderNo, orderDate, requiredDate, shippedDate, status, name as customer, comments " \
-                  "FROM orders JOIN customers USING(customerId) WHERE country = %s ORDER BY orderNo"
+            # sql = "SELECT orderNo, orderDate, requiredDate, shippedDate, status, name as customer, comments " \
+            #       "FROM orders JOIN customers USING(customerId) WHERE country = %s ORDER BY orderNo"
+            sql = "SELECT * FROM orders JOIN customers USING(customerId) WHERE country = %s ORDER BY orderNo"
             params = (value)
 
         util = DB_Utils()
         rows = util.queryExecutor(sql=sql, params=params)
         return rows
 
-    # def selectUsingCity(self, value):
-    #     if value == "없음":
-    #         sql = "SELECT * FROM customers WHERE city IS NULL"
-    #         params = ()
-    #     else:
-    #         sql = "SELECT * FROM customers WHERE city = %s"
-    #         params = (value)
-    #
-    #     util = DB_Utils()
-    #     rows = util.queryExecutor(sql=sql, params=params)
-    #     return rows
+    def selectUsingCity(self, value):
+        if value == "없음":
+            sql = "SELECT * FROM customers WHERE city IS NULL ORDER BY orderNo"
+            params = ()
+        else:
+            sql = "SELECT * FROM customers WHERE city = %s ORDER BY orderNo"
+            params = (value)
 
-    def selectUsingOption(self, customer_value, country_value, city_value):
+        util = DB_Utils()
+        rows = util.queryExecutor(sql=sql, params=params)
+        return rows
 
-        print(customer_value, country_value, city_value)
-        if customer_value == "ALL":
-            customer_value = "IS NULL"
-        if country_value == "ALL":
-            country_value = "IS NULL"
-        if city_value == "ALL":
-            city_value = "IS NULL"
-
-        sql = "SELECT * FROM customers WHERE customer = %s AND country = %s AND city = %s"
-        params = (customer_value, country_value, city_value)
+    def selectUsingCityInCountry(self, countryValue, cityValue):
+        sql = "SELECT DISTINCT city FROM customers WHERE country = %s AND city = %s ORDER BY orderNo"
+        params = (countryValue, cityValue)
 
         util = DB_Utils()
         rows = util.queryExecutor(sql=sql, params=params)
@@ -132,8 +133,8 @@ class DB_Queries:
     def showDetail(self, value):
 
         sql = "SELECT orderLineNo, productCode, name as productName, quantity, CONVERT(priceEach, CHAR) as priceEach, CONVERT(quantity*priceEach, CHAR) as 상품주문액 " \
-              "FROM orderDetails od INNER JOIN orders o USING(orderNo) " \
-              "INNER JOIN products p USING(productCode) " \
+              "FROM orderDetails od JOIN orders o USING(orderNo) " \
+              "JOIN products p USING(productCode) " \
               "WHERE orderNo = %s ORDER BY orderLineNo"
         params = (str(value))
 
@@ -145,14 +146,15 @@ class DB_Queries:
 class DetailWindow(QWidget):
     def __init__(self, orderNo):
         super().__init__()
+        self.orderNo = orderNo
+        self.saveMethod = "CSV"
         self.setupUI()
-        self.drawTable(orderNo)
+        self.drawTable(self.orderNo)
         self.show()
 
-        self.saveMethod = "CSV"
+
 
     def setupUI(self):
-
         # order_num
         self.orderNumLabel = QLabel("주문번호: ", self)
         # product_count
@@ -326,6 +328,7 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setupUI()
+        self.isCountrySelected = False
         self.customerValue = "ALL"
         self.countryValue = "ALL"
         self.cityValue = "ALL"
@@ -421,14 +424,36 @@ class MainWindow(QWidget):
 
     def customerComboBox_Activated(self):
         self.customerValue = self.customerComboBox.currentText()
+        self.countryComboBox.setCurrentText("ALL")
+        self.cityComboBox.setCurrentText("ALL")
 
 
     def countryComboBox_Activated(self):
         self.countryValue = self.countryComboBox.currentText()
+        if self.countryValue == "ALL":
+            self.isCountrySelected = False
+
+        self.isCountrySelected = True
+        if self.isCountrySelected:
+            query = DB_Queries()
+            rowsCity = query.selectCityInCountry(self.countryValue)
+            colCity = list(rowsCity[0].keys())[0]
+            itemCity = ['없음' if row[colCity] == None else row[colCity] for row in rowsCity]
+            self.cityComboBox.clear()
+            self.cityComboBox.addItems(itemCity)
+
+        self.customerComboBox.setCurrentText("ALL")
+        self.cityComboBox.setCurrentText("ALL")
 
 
     def cityComboBox_Activated(self):
         self.cityValue = self.cityComboBox.currentText()
+
+        if self.isCountrySelected == False:
+            self.countryComboBox.setCurrentText("ALL")
+        self.customerComboBox.setCurrentText("ALL")
+
+
 
 
     def initTable(self):
@@ -480,11 +505,23 @@ class MainWindow(QWidget):
 
     def searchButton_Clicked(self):
         query = DB_Queries()
-        # results = query.selectUsingOption(self.customerValue, self.countryValue, self.cityValue)
-        results = query.selectUsingCountry(self.countryValue)
+        results = query.showAll()
+
+        if self.customerValue != "ALL" and self.countryValue == "ALL" and self.cityValue == "ALL":
+            results = query.selectUsingCustomer(self.customerValue)
+        elif self.customerValue == "ALL" and self.countryValue != "ALL" and self.cityValue == "ALL":
+            results = query.selectUsingCountry(self.countryValue)
+        elif self.customerValue == "ALL" and self.countryValue == "ALL" and self.cityValue != "ALL":
+            results = query.selectUsingCity(self.cityValue)
+        elif self.customerValue == "ALL" and self.countryValue != "ALL" and self.cityValue != "ALL":
+            resutls = query.selectUsingCityInCountry(self.countryValue, self.cityValue)
 
         self.drawTable(results)
 
+        # combo box 선택한 값 초기화
+        self.customerValue = "ALL"
+        self.countryValue = "ALL"
+        self.cityValue = "ALL"
 
     def tableCell_Clicked(self):
         # orderNo 전달
