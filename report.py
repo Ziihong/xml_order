@@ -217,8 +217,6 @@ class DetailWindow(QWidget):
         self.setDetailHistory(orderNo, totalCount, round(totalPrice, 2))
 
         # 검색 결과 테이블
-        print("print ", len(self.results))
-
         self.tableWidget.clearContents()
         self.tableWidget.setRowCount(len(self.results))
         self.tableWidget.setColumnCount(len(self.results[0]))
