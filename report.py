@@ -24,18 +24,6 @@ class DB_Utils:
         finally:
             conn.close()
 
-    def updateExecutor(self, sql, params):
-        conn = pymysql.connect(host='localhost', user='guest', password='bemyguest', db='classicmodels', charset='utf8')
-
-        try:
-            with conn.cursor() as cursor:
-                cursor.execute(sql, params)
-            conn.commit()
-        except Exception as e:
-            print(e)
-            print(type(e))
-        finally:
-            conn.close()
 
 
 class DB_Queries:
@@ -74,7 +62,6 @@ class DB_Queries:
 
 
     def selectUsingCustomer(self, value):
-        print(value)
         if value == "ALL":
             sql = "SELECT orderNo, orderDate, requiredDate, shippedDate, status, name as customer, comments " \
                   "FROM orders JOIN customers USING(customerId) ORDER BY orderNo"
@@ -117,8 +104,6 @@ class DB_Queries:
         return rows
 
     def selectUsingCityInCountry(self, countryValue, cityValue):
-        # sql = "SELECT * FROM customers WHERE country = %s AND city = %s ORDER BY orderNo"
-        # params = (countryValue, cityValue)
 
         sql = "SELECT orderNo, orderDate, requiredDate, shippedDate, status, name as customer, comments" \
               " FROM orders JOIN customers USING(customerId) WHERE country = %s AND city = %s ORDER BY orderNo"
@@ -229,9 +214,11 @@ class DetailWindow(QWidget):
         totalPrice = 0
         for r in self.results:
             totalPrice += float(r["상품주문액"])
-        self.setDetailHistory(orderNo, totalCount, totalPrice)
+        self.setDetailHistory(orderNo, totalCount, round(totalPrice, 2))
 
         # 검색 결과 테이블
+        print("print ", len(self.results))
+
         self.tableWidget.clearContents()
         self.tableWidget.setRowCount(len(self.results))
         self.tableWidget.setColumnCount(len(self.results[0]))
@@ -432,39 +419,49 @@ class MainWindow(QWidget):
 
     def customerComboBox_Activated(self):
         self.customerValue = self.customerComboBox.currentText()
+
+        self.countryValue = self.countryComboBox.currentText()
+        self.init_cityComboBox()
+
         self.countryComboBox.setCurrentText("ALL")
         self.cityComboBox.setCurrentText("ALL")
 
-
     def countryComboBox_Activated(self):
         self.countryValue = self.countryComboBox.currentText()
-        if self.countryValue == "ALL":
-            self.isCountrySelected = False
-
-        self.isCountrySelected = True
-        if self.isCountrySelected:
-            query = DB_Queries()
-            rowsCity = query.selectCityInCountry(self.countryValue)
-            colCity = list(rowsCity[0].keys())[0]
-            itemCity = ['없음' if row[colCity] == None else row[colCity] for row in rowsCity]
-            self.cityComboBox.clear()
-            self.cityComboBox.addItem("ALL")
-            self.cityComboBox.addItems(itemCity)
 
         self.customerComboBox.setCurrentText("ALL")
-        self.cityComboBox.setCurrentText("ALL")
+
+        if self.countryValue == "ALL":
+            self.init_cityComboBox()
+
+        else:
+            query = DB_Queries()
+            self.isCountrySelected = True
+            if self.isCountrySelected:
+                rowsCity = query.selectCityInCountry(self.countryValue)
+                colCity = list(rowsCity[0].keys())[0]
+                itemCity = ['없음' if row[colCity] == None else row[colCity] for row in rowsCity]
+                self.cityComboBox.clear()
+                self.cityComboBox.addItem("City ALL")
+                self.cityComboBox.addItems(itemCity)
+
 
 
     def cityComboBox_Activated(self):
         self.cityValue = self.cityComboBox.currentText()
 
-        if self.countryValue == "ALL":
-            self.countryComboBox.setCurrentText("ALL")
-
-        if self.isCountrySelected == False:
-            self.countryComboBox.setCurrentText("ALL")
         self.customerComboBox.setCurrentText("ALL")
 
+
+    def init_cityComboBox(self):
+        query = DB_Queries()
+        rowsCity = query.selectCity()
+        colCity = list(rowsCity[0].keys())[0]
+        itemCity = ["없음" if row[colCity] == None else row[colCity] for row in rowsCity]
+        self.cityComboBox.clear()
+        self.cityComboBox.addItem("ALL")
+        self.cityComboBox.addItems(itemCity)
+        self.cityComboBox.setCurrentText("ALL")
 
 
     def initTable(self):
@@ -472,8 +469,6 @@ class MainWindow(QWidget):
 
 
     def drawTable(self, results):
-        # 검색 결과 개수
-        self.setResultCount(len(results))
 
         # 검색 결과 테이블
         self.tableWidget.clearContents()
@@ -504,37 +499,61 @@ class MainWindow(QWidget):
 
     # Click event
     def initButton_Clicked(self):
+
+        self.customerValue = "ALL"
+        self.countryValue = "ALL"
+        self.cityValue = "ALL"
+
+        self.init_cityComboBox()
+
         self.customerComboBox.setCurrentText("ALL")
         self.countryComboBox.setCurrentText("ALL")
         self.cityComboBox.setCurrentText("ALL")
 
+
+
         query = DB_Queries()
         results = query.showAll()
-
+        # 테이블
         self.drawTable(results)
+
+        # 검색 결과 개수
+        self.setResultCount(len(results))
+
 
 
     def searchButton_Clicked(self):
-        query = DB_Queries()
-        results = query.showAll()
 
-        if self.customerValue != "ALL" and self.countryValue == "ALL" and self.cityValue == "ALL":
+        self.customerValue = self.customerComboBox.currentText()
+        self.countryValue = self.countryComboBox.currentText()
+        self.cityValue = self.cityComboBox.currentText()
+
+        query = DB_Queries()
+        results = [{}]
+        if self.customerValue == "ALL" and self.countryValue == "ALL" and self.cityValue == "ALL":
+            results = query.showAll()
+        elif self.customerValue != "ALL" and self.countryValue == "ALL" and self.cityValue == "ALL":
             results = query.selectUsingCustomer(self.customerValue)
-        elif self.customerValue == "ALL" and self.countryValue != "ALL" and self.cityValue == "ALL":
+        elif self.customerValue == "ALL" and self.countryValue != "ALL" and self.cityValue == "City ALL":
             results = query.selectUsingCountry(self.countryValue)
         elif self.customerValue == "ALL" and self.countryValue == "ALL" and self.cityValue != "ALL":
             results = query.selectUsingCity(self.cityValue)
-        elif self.customerValue == "ALL" and self.countryValue != "ALL" and self.cityValue != "ALL":
-            print(self.countryValue, self.cityValue)
+        elif self.customerValue == "ALL" and self.countryValue != "ALL" and self.cityValue != "City ALL":
             results = query.selectUsingCityInCountry(self.countryValue, self.cityValue)
 
-        print(results)
-        self.drawTable(results)
+        # 검색 결과 있을 때
+        if len(results) != 0:
+            self.drawTable(results)
 
-        # combo box 선택한 값 초기화
-        self.customerValue = "ALL"
-        self.countryValue = "ALL"
-        self.cityValue = "ALL"
+        # 검색 결과 없을 때
+        else:
+            self.tableWidget.clearContents()
+            self.tableWidget.setRowCount(0)
+
+        # 검색 결과 개수
+        self.setResultCount(len(results))
+
+
 
     def tableCell_Clicked(self):
         # orderNo 전달
