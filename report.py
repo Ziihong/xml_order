@@ -92,7 +92,7 @@ class DB_Queries:
     def selectUsingCity(self, value):
         if value == "ALL":
             sql = "SELECT orderNo, orderDate, requiredDate, shippedDate, status, name as customer, comments" \
-                  " FROM customers ORDER BY orderNo"
+                  " FROM orders JOIN customers USING(customerId) ORDER BY orderNo"
             params = ()
         else:
             sql = "SELECT orderNo, orderDate, requiredDate, shippedDate, status, name as customer, comments" \
@@ -126,8 +126,8 @@ class DB_Queries:
     def showDetail(self, value):
 
         sql = "SELECT orderLineNo, productCode, name as productName, quantity, CONVERT(priceEach, CHAR) as priceEach, CONVERT(quantity*priceEach, CHAR) as 상품주문액 " \
-              "FROM orderDetails od JOIN orders o USING(orderNo) " \
-              "JOIN products p USING(productCode) " \
+              "FROM orderDetails JOIN orders USING(orderNo) " \
+              "JOIN products USING(productCode) " \
               "WHERE orderNo = %s ORDER BY orderLineNo"
         params = (str(value))
 
@@ -141,6 +141,7 @@ class DetailWindow(QWidget):
         super().__init__()
         self.orderNo = orderNo
         self.saveMethod = "CSV"
+
         self.setupUI()
         self.drawTable(self.orderNo)
         self.show()
@@ -264,7 +265,7 @@ class DetailWindow(QWidget):
 
 
     def writeCSV(self):
-        with open("orderDetail.csv", "w", encoding="utf-8", newline='') as f:
+        with open("{}.csv".format(self.orderNo), "w", encoding="utf-8", newline='') as f:
             wr = csv.writer(f)
             columnNames = list(self.results[0].keys())
             wr.writerow(columnNames)
@@ -282,7 +283,7 @@ class DetailWindow(QWidget):
 
         newDict = dict(orderDetail = self.results)
 
-        with open("orderDetail.json", "w", encoding="utf-8") as f:
+        with open("{}.json".format(self.orderNo), "w", encoding="utf-8") as f:
             json.dump(newDict, f, indent=4, ensure_ascii=False)
 
 
@@ -313,7 +314,7 @@ class DetailWindow(QWidget):
                 else:
                     rowElement.attrib[colName] = row[colName]
 
-        ET.ElementTree(rootElement).write("orderDetail.xml", encoding="utf-8", xml_declaration=True)
+        ET.ElementTree(rootElement).write("{}.xml".format(self.orderNo), encoding="utf-8", xml_declaration=True)
 
 
 
@@ -411,27 +412,27 @@ class MainWindow(QWidget):
         self.setLayout(self.layout)
 
 
-        # 테이블 초기화
+        # ALL 테이블 초기화
         self.initTable()
 
 
     def customerComboBox_Activated(self):
         self.customerValue = self.customerComboBox.currentText()
 
-        self.countryValue = self.countryComboBox.currentText()
+        # country, city comboBox 값 초기화
         self.init_cityComboBox()
-
         self.countryComboBox.setCurrentText("ALL")
-        self.cityComboBox.setCurrentText("ALL")
+
 
     def countryComboBox_Activated(self):
         self.countryValue = self.countryComboBox.currentText()
 
+        # customer, city comboBox 값 초기화
         self.customerComboBox.setCurrentText("ALL")
-
         if self.countryValue == "ALL":
             self.init_cityComboBox()
 
+        # 국가별 해당하는 도시 comboBox 설정
         else:
             query = DB_Queries()
             self.isCountrySelected = True
@@ -448,6 +449,7 @@ class MainWindow(QWidget):
     def cityComboBox_Activated(self):
         self.cityValue = self.cityComboBox.currentText()
 
+        # customer comboBox 값 초기화
         self.customerComboBox.setCurrentText("ALL")
 
 
@@ -498,23 +500,21 @@ class MainWindow(QWidget):
     # Click event
     def initButton_Clicked(self):
 
+        # 모든 값 초기화
         self.customerValue = "ALL"
         self.countryValue = "ALL"
         self.cityValue = "ALL"
 
         self.init_cityComboBox()
-
         self.customerComboBox.setCurrentText("ALL")
         self.countryComboBox.setCurrentText("ALL")
         self.cityComboBox.setCurrentText("ALL")
 
-
-
         query = DB_Queries()
         results = query.showAll()
+
         # 테이블
         self.drawTable(results)
-
         # 검색 결과 개수
         self.setResultCount(len(results))
 
@@ -522,6 +522,7 @@ class MainWindow(QWidget):
 
     def searchButton_Clicked(self):
 
+        # 현재 comboBox 값 받아오기
         self.customerValue = self.customerComboBox.currentText()
         self.countryValue = self.countryComboBox.currentText()
         self.cityValue = self.cityComboBox.currentText()
